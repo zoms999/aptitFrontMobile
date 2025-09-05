@@ -1,0 +1,66 @@
+{
+  "name": "Aptit Mobile - 적성검사 앱",
+  "short_name": "Aptit",
+  "description": "모바일 최적화된 적성검사 애플리케이션으로 언제 어디서나 테스트를 진행하고 결과를 확인할 수 있습니다.",
+  "start_url": "/?utm_source=pwa",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "ko",
+  "dir": "ltr",
+  "categories": ["education", "productivity", "utilities"],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "shortcuts": [
+    {
+      "name": "새 테스트 시작",
+      "short_name": "테스트",
+      "description": "새로운 적성검사를 시작합니다",
+      "url": "/test?utm_source=pwa_shortcut"
+    },
+    {
+      "name": "결과 보기",
+      "short_name": "결과",
+      "description": "이전 테스트 결과를 확인합니다",
+      "url": "/results?utm_source=pwa_shortcut"
+    },
+    {
+      "name": "대시보드",
+      "short_name": "홈",
+      "description": "메인 대시보드로 이동합니다",
+      "url": "/dashboard?utm_source=pwa_shortcut"
+    }
+  ],
+
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+aptit",
+      "url": "/test?testId=%s"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/import",
+      "accept": {
+        "application/json": [".json"],
+        "text/csv": [".csv"]
+      }
+    }
+  ]
+}

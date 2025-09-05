@@ -1,0 +1,985 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model aisummary {
+  id           String        @id
+  userid       String
+  tabtype      String
+  summary      String
+  createdat    DateTime      @default(now())
+  updatedat    DateTime
+  analysistype String?
+  status       SummaryStatus @default(completed)
+
+  @@unique([userid, tabtype], map: "aisummary_userid_tabtype_unique")
+  @@index([tabtype])
+  @@index([userid])
+}
+
+model chat_conversations {
+  conversation_id   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String          @db.Uuid
+  question          String
+  response          String
+  retrieved_doc_ids String[]        @default([]) @db.Uuid
+  created_at        DateTime?       @default(now()) @db.Timestamp(6)
+  confidence_score  Float?
+  quality_label     String?         @db.VarChar(20)
+  processing_time   Float?
+  question_category String?         @db.VarChar(50)
+  question_intent   String?         @db.VarChar(50)
+  ab_variant        String?         @db.VarChar(10)
+  prompt_template   String?         @db.VarChar(50)
+  chat_users        chat_users      @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  chat_feedback     chat_feedback[]
+
+  @@index([user_id], map: "idx_chat_conversations_user_id")
+}
+
+model chat_documents {
+  doc_id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String                @db.Uuid
+  doc_type         String                @db.VarChar(100)
+  content          Json
+  summary_text     String
+  embedding_vector Unsupported("vector")
+  doc_metadata     Json?                 @default("{}")
+  created_at       DateTime?             @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?             @default(now()) @db.Timestamptz(6)
+  chat_users       chat_users            @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([doc_type], map: "idx_chat_documents_doc_type")
+  @@index([embedding_vector], map: "idx_chat_documents_embedding")
+  @@index([doc_metadata], map: "idx_chat_documents_metadata", type: Gin)
+  @@index([user_id], map: "idx_chat_documents_user_id")
+}
+
+model chat_etl_jobs {
+  job_id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  task_id               String?    @db.VarChar(100)
+  user_id               String     @db.Uuid
+  anp_seq               Int
+  status                String     @default("pending") @db.VarChar(50)
+  progress_percentage   Int?       @default(0)
+  current_step          String?    @db.VarChar(255)
+  completed_steps       Int?       @default(0)
+  total_steps           Int?       @default(7)
+  started_at            DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at            DateTime?  @default(now()) @db.Timestamp(6)
+  completed_at          DateTime?  @db.Timestamp(6)
+  error_message         String?
+  retry_count           Int?       @default(0)
+  query_results_summary Json?
+  documents_created     String[]
+  error_type            String?    @db.VarChar(100)
+  failed_stage          String?    @db.VarChar(100)
+  chat_users            chat_users @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model chat_feedback {
+  feedback_id        String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id    String             @db.Uuid
+  user_id            String             @db.Uuid
+  rating             Int?
+  helpful            Boolean?
+  comment            String?
+  tags               String[]
+  created_at         DateTime?          @default(now()) @db.Timestamp(6)
+  chat_conversations chat_conversations @relation(fields: [conversation_id], references: [conversation_id], onDelete: Cascade, onUpdate: NoAction)
+  chat_users         chat_users         @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([conversation_id], map: "idx_chat_feedback_conversation_id")
+  @@index([user_id], map: "idx_chat_feedback_user_id")
+}
+
+model chat_jobs {
+  job_id           String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job_code         String                 @unique @db.VarChar(20)
+  job_name         String                 @db.VarChar(200)
+  job_outline      String?
+  main_business    String?
+  embedding_vector Unsupported("vector")?
+  created_at       DateTime?              @default(now()) @db.Timestamp(6)
+
+  @@index([embedding_vector], map: "idx_chat_jobs_embedding")
+  @@index([job_code], map: "idx_chat_jobs_job_code")
+}
+
+model chat_majors {
+  major_id         String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  major_code       String                 @unique @db.VarChar(20)
+  major_name       String                 @db.VarChar(200)
+  description      String?
+  embedding_vector Unsupported("vector")?
+  created_at       DateTime?              @default(now()) @db.Timestamp(6)
+
+  @@index([embedding_vector], map: "idx_chat_majors_embedding")
+  @@index([major_code], map: "idx_chat_majors_major_code")
+}
+
+model chat_users {
+  user_id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anp_seq            Int                  @unique
+  name               String               @db.VarChar(100)
+  email              String?              @db.VarChar(255)
+  test_completed_at  DateTime             @db.Timestamp(6)
+  created_at         DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?            @default(now()) @db.Timestamp(6)
+  chat_conversations chat_conversations[]
+  chat_documents     chat_documents[]
+  chat_etl_jobs      chat_etl_jobs[]
+  chat_feedback      chat_feedback[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_account {
+  ac_id                 String                  @unique(map: "mwd_account_un") @db.VarChar(50)
+  ac_pw                 String                  @db.VarChar(80)
+  ac_use                String                  @db.Char(1)
+  ac_insert_date        DateTime                @db.Timestamp(6)
+  ac_leave_date         DateTime                @db.Timestamp(6)
+  ac_gid                String                  @id @db.Uuid
+  ins_seq               Int
+  pe_seq                Int
+  ac_expire_date        DateTime                @db.Timestamp(6)
+  ac_terms_use          String?                 @db.Char(1)
+  ac_terms_person       String?                 @db.Char(1)
+  ac_terms_event        String?                 @db.Char(1)
+  mwd_account_memo      mwd_account_memo?
+  mwd_answer_progress   mwd_answer_progress[]
+  mwd_choice_result     mwd_choice_result[]
+  mwd_log_account       mwd_log_account[]       @ignore
+  mwd_log_login_account mwd_log_login_account[] @ignore
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_account_inquiry {
+  ai_seq                    Int                         @id
+  ai_date                   DateTime                    @db.Timestamp(6)
+  ai_title                  String                      @db.VarChar(50)
+  ai_delete                 String                      @db.Char(1)
+  ai_contents               String                      @db.VarChar(1000)
+  ins_seq                   Int
+  ai_reply                  String                      @db.Char(1)
+  mwd_institute             mwd_institute               @relation(fields: [ins_seq], references: [ins_seq], onDelete: NoAction, onUpdate: NoAction)
+  mwd_account_inquiry_reply mwd_account_inquiry_reply[] @ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_account_inquiry_reply {
+  air_contents        String              @db.VarChar(1000)
+  air_date            DateTime            @db.Timestamp(6)
+  ai_seq              Int
+  mg_seq              Int
+  mwd_account_inquiry mwd_account_inquiry @relation(fields: [ai_seq], references: [ai_seq], onDelete: NoAction, onUpdate: NoAction)
+  mwd_manager         mwd_manager         @relation(fields: [mg_seq], references: [mg_seq], onDelete: NoAction, onUpdate: NoAction)
+
+  @@ignore
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_account_memo {
+  acm_memo    String      @db.VarChar(300)
+  acm_date    DateTime    @db.Timestamp(6)
+  ac_gid      String      @id(map: "mwd_account_memo_pk") @db.Uuid
+  mwd_account mwd_account @relation(fields: [ac_gid], references: [ac_gid], onDelete: NoAction, onUpdate: NoAction, map: "mwd_account_memo_fk")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_answer {
+  qu_code             String              @db.Char(8)
+  anp_seq             Int
+  an_ex               Int
+  an_wei              Int                 @db.SmallInt
+  an_progress         Int
+  mwd_answer_progress mwd_answer_progress @relation(fields: [anp_seq], references: [anp_seq], onDelete: NoAction, onUpdate: NoAction)
+  mwd_question        mwd_question        @relation(fields: [qu_code], references: [qu_code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([anp_seq, qu_code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_answer_progress {
+  anp_seq             Int                   @id
+  anp_start_date      DateTime?             @db.Timestamp(6)
+  anp_end_date        DateTime?             @db.Timestamp(6)
+  anp_done            String                @db.Char(1)
+  qu_code             String                @db.Char(8)
+  ac_gid              String                @db.Uuid
+  anp_step            String                @db.VarChar(8)
+  cr_seq              Int
+  mwd_answer          mwd_answer[]
+  mwd_account         mwd_account           @relation(fields: [ac_gid], references: [ac_gid], onDelete: NoAction, onUpdate: NoAction)
+  mwd_choice_result   mwd_choice_result     @relation(fields: [ac_gid, cr_seq], references: [ac_gid, cr_seq], onDelete: NoAction, onUpdate: NoAction, map: "mwd_answer_progress_ac_gid_fkey1")
+  mwd_question        mwd_question          @relation(fields: [qu_code], references: [qu_code], onDelete: NoAction, onUpdate: NoAction)
+  mwd_log_view_result mwd_log_view_result[] @ignore
+  mwd_resduty         mwd_resduty[]
+  mwd_resjob          mwd_resjob[]
+  mwd_resval          mwd_resval?
+  mwd_score1          mwd_score1[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_choice_result {
+  cr_duty             String                @db.Char(1)
+  cr_study            String                @db.Char(1)
+  cr_subject          String?               @db.Char(1)
+  cr_image            String                @db.Char(1)
+  ac_gid              String                @db.Uuid
+  cr_seq              Int
+  pd_num              Int                   @default(0) @db.SmallInt
+  pd_kind             String?               @db.VarChar(10)
+  pd_price            Int?
+  cr_paymentdate      DateTime?             @db.Timestamp(6)
+  ins_seq             Int?
+  tur_seq             Int?
+  cr_pay              String?               @db.Char(1)
+  order_id            String?               @db.VarChar(64)
+  payment_method      String?               @db.VarChar(30)
+  payment_status      String?               @default("READY") @db.VarChar(20)
+  turn_pd_seq         Int?
+  mwd_answer_progress mwd_answer_progress[]
+  mwd_account         mwd_account           @relation(fields: [ac_gid], references: [ac_gid], onDelete: NoAction, onUpdate: NoAction)
+  mwd_product         mwd_product           @relation(fields: [pd_num], references: [pd_num], onDelete: NoAction, onUpdate: NoAction, map: "mwd_choice_result_fk")
+
+  @@id([ac_gid, cr_seq])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_common_code {
+  coc_code       String @id @db.VarChar(10)
+  coc_explain    String @db.VarChar(100)
+  coc_use        String @db.Char(1)
+  coc_order      Int
+  coc_code_name  String @db.VarChar(50)
+  coc_group      String @db.VarChar(10)
+  coc_group_name String @db.VarChar(50)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_company {
+  co_name         String  @db.VarChar(50)
+  co_tel1         String  @db.VarChar(20)
+  co_tel2         String  @db.VarChar(20)
+  co_fax1         String  @db.VarChar(20)
+  co_road_addr    String  @db.VarChar(200)
+  co_jibun_addr   String  @db.VarChar(200)
+  co_license_num  String  @db.VarChar(20)
+  co_identity_num String  @db.VarChar(20)
+  co_ceo          String  @db.VarChar(20)
+  co_postcode     String  @db.VarChar(10)
+  co_detail_addr  String  @db.VarChar(100)
+  co_bill_email   String  @db.VarChar(20)
+  co_to_email     String  @db.VarChar(20)
+  co_online_num   String  @db.VarChar(20)
+  co_extra_addr   String? @db.VarChar(100)
+
+  @@ignore
+}
+
+model mwd_competency_subject_map {
+  mcs_seq     Int     @id @default(autoincrement())
+  tal_code    String  @db.VarChar(255)
+  tal_name    String  @db.VarChar(255)
+  mcs_group   String? @db.VarChar(255)
+  mcs_area    String? @db.VarChar(255)
+  mcs_name    String  @db.VarChar(255)
+  mcs_explain String?
+  mcs_rank    Int?
+  mcs_use     String? @default("Y") @db.Char(1)
+
+  @@unique([tal_code, mcs_name], map: "unique_competency_subject")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_duty {
+  du_code               String                  @id @db.Char(8)
+  du_name               String                  @db.VarChar(100)
+  du_use                String                  @db.Char(1)
+  du_outline            String?
+  du_department         String?
+  mwd_tendency_duty_map mwd_tendency_duty_map[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_image_job_map {
+  jo_code      String       @db.Char(8)
+  qu_code      String       @db.Char(8)
+  mwd_job      mwd_job      @relation(fields: [jo_code], references: [jo_code], onDelete: NoAction, onUpdate: NoAction, map: "mwd_image_job_map_fk")
+  mwd_question mwd_question @relation(fields: [qu_code], references: [qu_code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([qu_code, jo_code])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_institute {
+  ins_license_num          String                @db.VarChar(20)
+  ins_identity_num         String                @db.VarChar(20)
+  ins_ceo                  String                @db.VarChar(50)
+  ins_postcode             String                @db.VarChar(20)
+  ins_road_addr            String                @db.VarChar(100)
+  ins_jibun_addr           String                @db.VarChar(100)
+  ins_detail_addr          String                @db.VarChar(100)
+  ins_extra_addr           String                @db.VarChar(100)
+  ins_name                 String                @db.VarChar(50)
+  ins_tel1                 String                @db.VarChar(20)
+  ins_tel2                 String                @db.VarChar(20)
+  ins_fax1                 String                @db.VarChar(20)
+  ins_business             String                @db.VarChar(200)
+  ins_business_detail      String                @db.VarChar(200)
+  ins_manager1_name        String                @db.VarChar(50)
+  ins_manager1_cellphone   String                @db.VarChar(20)
+  ins_manager1_email       String                @db.VarChar(100)
+  ins_manager2_name        String                @db.VarChar(50)
+  ins_manager2_cellphone   String                @db.VarChar(20)
+  ins_manager2_email       String                @db.VarChar(100)
+  ins_seq                  Int                   @id @default(autoincrement())
+  ins_bill_email           String                @db.VarChar(100)
+  ins_manager1_team        String                @db.VarChar(20)
+  ins_manager1_position    String                @db.VarChar(20)
+  ins_manager2_team        String                @db.VarChar(20)
+  ins_manager2_position    String                @db.VarChar(20)
+  ins_url_code             String                @db.VarChar(200)
+  ins_result_view_enabled  String                @default("N") @db.Char(1)
+  ins_tendency_view_type   String                @default("summary") @db.VarChar(10)
+  ins_competency_view_type String                @default("summary") @db.VarChar(10)
+  mwd_account_inquiry      mwd_account_inquiry[]
+  mwd_institute_turn       mwd_institute_turn[]
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_institute_member {
+  ins_seq            Int
+  tur_seq            Int
+  pe_seq             Int
+  mem_insert_date    DateTime           @db.Timestamp(6)
+  mwd_person         mwd_person         @relation(fields: [pe_seq], references: [pe_seq], onDelete: NoAction, onUpdate: NoAction, map: "mwd_institute_member_fk")
+  mwd_institute_turn mwd_institute_turn @relation(fields: [ins_seq, tur_seq], references: [ins_seq, tur_seq], onDelete: NoAction, onUpdate: NoAction, map: "mwd_institute_member_fk_1")
+
+  @@ignore
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_institute_turn {
+  ins_seq              Int
+  tur_seq              Int                    @unique(map: "mwd_institute_turn_un")
+  tur_use              String                 @db.Char(1)
+  tur_count            Int
+  tur_req_sum          Int
+  tur_use_sum          Int
+  tur_code             String                 @db.VarChar(30)
+  tur_is_paid          String                 @default("N") @db.Char(1)
+  tur_allow_no_payment String                 @default("N") @db.Char(1)
+  mwd_institute_member mwd_institute_member[] @ignore
+  mwd_institute        mwd_institute          @relation(fields: [ins_seq], references: [ins_seq], onDelete: NoAction, onUpdate: NoAction, map: "mwd_institute_turn_fk")
+  mwd_turn_product     mwd_turn_product[]
+
+  @@id([ins_seq, tur_seq], map: "mwd_institute_turn_pk")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_job {
+  jo_code              String                 @id @db.Char(8)
+  jo_name              String                 @db.VarChar(100)
+  jo_outline           String?
+  jo_use               String                 @db.Char(1)
+  jo_mainbusiness      String?
+  mwd_image_job_map    mwd_image_job_map[]
+  mwd_job_major_map    mwd_job_major_map[]
+  mwd_talent_job_map   mwd_talent_job_map[]
+  mwd_tendency_job_map mwd_tendency_job_map[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_job_major_map {
+  ma_code   String    @db.Char(8)
+  jo_code   String    @db.Char(8)
+  mwd_job   mwd_job   @relation(fields: [jo_code], references: [jo_code], onDelete: NoAction, onUpdate: NoAction, map: "mwd_job_major_map_fk")
+  mwd_major mwd_major @relation(fields: [ma_code], references: [ma_code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([ma_code, jo_code])
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_log_account {
+  action_date   DateTime    @db.Timestamp(6)
+  action_type   String      @db.Char(1)
+  action_reason String      @db.VarChar(200)
+  ac_gid        String      @db.Uuid
+  mg_seq        Int?
+  action_result String      @db.VarChar(5)
+  action_func   String      @db.VarChar(50)
+  mwd_account   mwd_account @relation(fields: [ac_gid], references: [ac_gid], onDelete: NoAction, onUpdate: NoAction)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_log_login_account {
+  login_date  DateTime    @db.Timestamp(6)
+  ac_gid      String      @db.Uuid
+  user_agent  Json        @db.Json
+  mwd_account mwd_account @relation(fields: [ac_gid], references: [ac_gid], onDelete: NoAction, onUpdate: NoAction)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_log_login_manager {
+  login_date  DateTime    @db.Timestamp(6)
+  mg_seq      Int
+  user_agent  Json        @db.Json
+  mwd_manager mwd_manager @relation(fields: [mg_seq], references: [mg_seq], onDelete: NoAction, onUpdate: NoAction)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_log_manager {
+  mg_seq         Int
+  mg_seq_updater Int
+  action_date    DateTime    @db.Timestamp(6)
+  action_reason  String      @db.VarChar(200)
+  action_type    String      @db.Char(1)
+  action_result  String      @db.VarChar(5)
+  action_func    String      @db.VarChar(50)
+  mwd_manager    mwd_manager @relation(fields: [mg_seq], references: [mg_seq], onDelete: NoAction, onUpdate: NoAction)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model mwd_log_view_result {
+  mg_seq              Int
+  anp_seq             Int
+  view_reason         String              @db.VarChar(200)
+  view_date           DateTime            @db.Timestamp(6)
+  mwd_answer_progress mwd_answer_progress @relation(fields: [anp_seq], references: [anp_seq], onDelete: NoAction, onUpdate: NoAction, map: "mwd_log_view_result_fk")
+  mwd_manager         mwd_manager         @relation(fields: [mg_seq], references: [mg_seq], onDelete: NoAction, onUpdate: NoAction, map: "mwd_log_view_result_fk_1")
+
+  @@ignore
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_major {
+  ma_code           String              @id @db.Char(8)
+  ma_name           String              @db.VarChar(100)
+  ma_explain        String?
+  ma_use            String              @db.Char(1)
+  mwd_job_major_map mwd_job_major_map[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_manager {
+  mg_use                    String                      @db.Char(1)
+  mg_email                  String                      @unique(map: "mwd_manager_un") @db.VarChar(100)
+  mg_pw                     String                      @db.VarChar(80)
+  mg_seq                    Int                         @id
+  mg_name                   String                      @db.VarChar(20)
+  mg_cellphone              String                      @db.VarChar(20)
+  mg_contact                String                      @db.VarChar(20)
+  mg_postcode               String                      @db.VarChar(20)
+  mg_jibun_addr             String                      @db.VarChar(100)
+  mg_road_addr              String                      @db.VarChar(100)
+  mg_detail_addr            String                      @db.VarChar(100)
+  mg_extra_addr             String                      @db.VarChar(100)
+  mg_grant_account          Int                         @db.SmallInt
+  mg_grant_result           Int                         @db.SmallInt
+  mg_grant_manager          Int                         @db.SmallInt
+  mg_grant_log              Int                         @db.SmallInt
+  mg_grant_statistic        Int                         @db.SmallInt
+  mg_grant_inquiry          Int                         @db.SmallInt
+  mg_grant_institute        Int                         @db.SmallInt
+  mwd_account_inquiry_reply mwd_account_inquiry_reply[] @ignore
+  mwd_log_login_manager     mwd_log_login_manager[]     @ignore
+  mwd_log_manager           mwd_log_manager[]           @ignore
+  mwd_log_view_result       mwd_log_view_result[]       @ignore
+}
+
+model mwd_password_reset_token {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String   @db.VarChar(100)
+  token      String   @unique @db.VarChar(255)
+  expires_at DateTime @db.Timestamptz(6)
+}
+
+model mwd_payment {
+  payment_id                  Int                           @id @default(autoincrement())
+  cr_seq                      Int
+  ac_gid                      String                        @db.Uuid
+  order_id                    String                        @unique @db.VarChar(50)
+  amount                      Int
+  payment_key                 String?                       @unique @db.VarChar(100)
+  payment_type                String?                       @db.VarChar(20)
+  method                      String?                       @db.VarChar(20)
+  provider                    String?                       @db.VarChar(50)
+  status                      String                        @db.VarChar(20)
+  requested_at                DateTime                      @default(now())
+  approved_at                 DateTime?
+  fail_reason                 String?                       @db.VarChar(200)
+  receipt_url                 String?                       @db.VarChar(200)
+  mwd_payment_card            mwd_payment_card[]
+  mwd_payment_virtual_account mwd_payment_virtual_account[]
+}
+
+model mwd_payment_card {
+  id                      Int         @id @default(autoincrement())
+  payment_id              Int
+  card_company            String?     @db.VarChar(50)
+  card_number             String?     @db.VarChar(20)
+  installment_plan_months Int?        @default(0)
+  approval_number         String?     @db.VarChar(50)
+  card_type               String?     @db.VarChar(20)
+  owner_type              String?     @db.VarChar(20)
+  created_at              DateTime?   @default(now()) @db.Timestamp(6)
+  mwd_payment             mwd_payment @relation(fields: [payment_id], references: [payment_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model mwd_payment_log {
+  id             Int      @id @default(autoincrement())
+  order_id       String   @db.VarChar(50)
+  amount         Int
+  order_name     String   @db.VarChar(100)
+  ac_gid         String   @db.Uuid
+  product_id     Int?
+  product_type   String?  @db.VarChar(20)
+  payment_method String?  @db.VarChar(20)
+  status         String   @db.VarChar(20)
+  event_type     String?  @db.VarChar(20)
+  code           String?  @db.VarChar(50)
+  message        String?  @db.VarChar(200)
+  created_at     DateTime @default(now())
+}
+
+model mwd_payment_virtual_account {
+  id             Int         @id @default(autoincrement())
+  payment_id     Int
+  account_number String?     @db.VarChar(50)
+  bank_code      String?     @db.VarChar(20)
+  bank_name      String?     @db.VarChar(50)
+  customer_name  String?     @db.VarChar(50)
+  due_date       DateTime?   @db.Timestamp(6)
+  refund_status  String?     @db.VarChar(20)
+  created_at     DateTime?   @default(now()) @db.Timestamp(6)
+  mwd_payment    mwd_payment @relation(fields: [payment_id], references: [payment_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_person {
+  pe_name              String                 @db.VarChar(50)
+  pe_birth_year        Int                    @db.SmallInt
+  pe_birth_month       Int                    @db.SmallInt
+  pe_birth_day         Int                    @db.SmallInt
+  pe_sex               String                 @db.Char(1)
+  pe_cellphone         String                 @db.VarChar(20)
+  pe_contact           String                 @db.VarChar(20)
+  pe_email             String                 @db.VarChar(100)
+  pe_postcode          String                 @db.VarChar(20)
+  pe_road_addr         String                 @db.VarChar(100)
+  pe_jibun_addr        String                 @db.VarChar(100)
+  pe_detail_addr       String                 @db.VarChar(100)
+  pe_extra_addr        String                 @db.VarChar(100)
+  pe_ur_education      String                 @db.VarChar(10)
+  pe_ur_job            String                 @db.VarChar(10)
+  pe_seq               Int                    @id
+  pe_school_name       String                 @db.VarChar(50)
+  pe_school_major      String                 @db.VarChar(50)
+  pe_school_year       String                 @db.VarChar(10)
+  pe_job_name          String                 @db.VarChar(50)
+  pe_job_detail        String                 @db.VarChar(100)
+  mwd_institute_member mwd_institute_member[] @ignore
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_product {
+  pd_num               Int                 @id(map: "mwd_product_pk") @db.SmallInt
+  pd_price             Int
+  pd_dc                Int                 @db.SmallInt
+  pd_name              String              @db.VarChar(30)
+  pd_type              String              @db.VarChar(10)
+  pd_quota             String              @db.VarChar(10)
+  pd_virtual_expire_at Int                 @db.SmallInt
+  pd_use               String              @db.Char(1)
+  pd_kind              String              @db.VarChar(10)
+  mwd_choice_result    mwd_choice_result[]
+  mwd_turn_product     mwd_turn_product[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_question {
+  qu_code                 String                      @id @db.Char(8)
+  qu_kind1                String                      @db.VarChar(10)
+  qu_kind2                String                      @db.Char(8)
+  qu_kind3                String?                     @db.Char(8)
+  qu_order                Int
+  qu_use                  String                      @db.Char(1)
+  qu_ex1wei               Int                         @db.SmallInt
+  qu_ex2wei               Int                         @db.SmallInt
+  qu_ex3wei               Int                         @db.SmallInt
+  qu_ex4wei               Int                         @db.SmallInt
+  qu_ex5wei               Int                         @db.SmallInt
+  qu_explain              String?
+  qu_ex6wei               Int                         @db.SmallInt
+  qu_filename             String                      @db.Char(8)
+  qu_qusyn                String?                     @db.Char(1)
+  qu_action               String?                     @db.VarChar(50)
+  qu_category             String?                     @db.VarChar(50)
+  qu_choice_options       Int?                        @db.SmallInt
+  qu_time_limit_sec       Int?
+  qu_template_type        mwd_question_template_type?
+  qu_title                String?
+  qu_passage              String?
+  qu_instruction          String?
+  qu_template_options     Json?
+  mwd_answer              mwd_answer[]
+  mwd_answer_progress     mwd_answer_progress[]
+  mwd_image_job_map       mwd_image_job_map[]
+  mwd_question_asset      mwd_question_asset[]
+  mwd_question_choice     mwd_question_choice[]
+  mwd_question_choice_old mwd_question_choice_old[]
+  mwd_question_lang       mwd_question_lang[]
+
+  @@index([qu_template_type], map: "idx_mwd_question_template_type")
+}
+
+model mwd_question_asset {
+  asset_id                Int                       @id @default(autoincrement())
+  qu_code                 String                    @db.Char(8)
+  display_order           Int                       @default(0)
+  mwd_question            mwd_question              @relation(fields: [qu_code], references: [qu_code], onDelete: Cascade, onUpdate: NoAction)
+  mwd_question_asset_lang mwd_question_asset_lang[]
+}
+
+model mwd_question_asset_lang {
+  asset_id           Int
+  lang_code          String             @db.VarChar(5)
+  image_path         String
+  mwd_question_asset mwd_question_asset @relation(fields: [asset_id], references: [asset_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([asset_id, lang_code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_question_attr {
+  qua_code             String                 @id @db.Char(8)
+  qua_name             String                 @db.VarChar(20)
+  qua_totalscore       Int
+  qua_cutline          Decimal                @db.Decimal(3, 2)
+  qua_order            Int?
+  qua_type             String?                @db.VarChar(20)
+  mwd_question_explain mwd_question_explain[]
+  mwd_score1           mwd_score1[]
+  mwd_studyway_rate    mwd_studyway_rate[]
+  mwd_tendency_study   mwd_tendency_study?
+}
+
+model mwd_question_choice {
+  choice_id                Int                        @id @default(autoincrement())
+  qu_code                  String                     @db.Char(8)
+  display_order            Int
+  weight                   Int                        @default(0)
+  mwd_question             mwd_question               @relation(fields: [qu_code], references: [qu_code], onDelete: Cascade, onUpdate: NoAction, map: "mwd_question_choice_qu_code_fkey1")
+  mwd_question_choice_lang mwd_question_choice_lang[]
+}
+
+model mwd_question_choice_lang {
+  choice_id           Int
+  lang_code           String              @db.VarChar(5)
+  choice_text         String?
+  choice_image_path   String?
+  mwd_question_choice mwd_question_choice @relation(fields: [choice_id], references: [choice_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([choice_id, lang_code])
+}
+
+model mwd_question_choice_old {
+  id           Int          @id @default(autoincrement())
+  qu_code      String       @db.Char(8)
+  an_val       Int          @db.SmallInt
+  an_text      String
+  an_desc      String?
+  an_sub       String?
+  an_wei       Int?         @default(0) @db.SmallInt
+  an_use       String?      @default("Y") @db.Char(1)
+  mwd_question mwd_question @relation(fields: [qu_code], references: [qu_code], onDelete: Cascade, onUpdate: NoAction, map: "mwd_question_choice_qu_code_fkey")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_question_explain {
+  que_explain       String
+  qua_code          String
+  que_switch        Int
+  mwd_question_attr mwd_question_attr @relation(fields: [qua_code], references: [qua_code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([qua_code, que_switch])
+}
+
+model mwd_question_lang {
+  qu_code        String       @db.Char(8)
+  lang_code      String       @db.VarChar(5)
+  qu_text        String
+  qu_explain     String?
+  qu_category    String?      @db.VarChar(50)
+  qu_title       String?
+  qu_passage     String?
+  qu_instruction String?
+  mwd_question   mwd_question @relation(fields: [qu_code], references: [qu_code], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([qu_code, lang_code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_resduty {
+  anp_seq             Int
+  red_kind            String              @db.VarChar(10)
+  red_code            String              @db.Char(8)
+  red_rank            Int?                @db.SmallInt
+  red_cnt             Int?                @db.SmallInt
+  mwd_answer_progress mwd_answer_progress @relation(fields: [anp_seq], references: [anp_seq], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([anp_seq, red_kind, red_code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_resjob {
+  anp_seq             Int
+  rej_kind            String              @db.VarChar(10)
+  rej_code            String              @db.Char(8)
+  rej_rank            Int?                @default(0) @db.SmallInt
+  rej_quacode         String?             @db.Char(8)
+  rej_cnt             Int?                @default(0) @db.SmallInt
+  mwd_answer_progress mwd_answer_progress @relation(fields: [anp_seq], references: [anp_seq], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([anp_seq, rej_kind, rej_code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_resval {
+  anp_seq             Int                 @id
+  rv_tnd1             String              @db.Char(8)
+  rv_tnd2             String              @db.Char(8)
+  rv_thk1             String?             @db.Char(8)
+  rv_thk2             String?             @db.Char(8)
+  rv_thktscore        Int?
+  rv_tal1             String?             @db.Char(8)
+  rv_tal2             String?             @db.Char(8)
+  rv_tal3             String?             @db.Char(8)
+  rv_tal4             String?             @db.Char(8)
+  rv_tal5             String?             @db.Char(8)
+  rv_tal6             String?             @db.Char(8)
+  rv_tal7             String?             @db.Char(8)
+  rv_imgresrate       Decimal?            @db.Decimal(5, 3)
+  rv_imgtcnt          Int?                @db.SmallInt
+  rv_imgrcnt          Int?                @db.SmallInt
+  rv_tnd3             String?             @db.Char(8)
+  mwd_answer_progress mwd_answer_progress @relation(fields: [anp_seq], references: [anp_seq], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_score1 {
+  sc1_step            String              @db.VarChar(10)
+  qua_code            String              @db.Char(8)
+  anp_seq             Int
+  sc1_score           Int
+  sc1_rate            Decimal             @db.Decimal(5, 3)
+  sc1_rank            Int
+  sc1_resrate         Decimal?            @default(0) @db.Decimal(5, 3)
+  sc1_qcnt            Int?                @default(0) @db.SmallInt
+  mwd_answer_progress mwd_answer_progress @relation(fields: [anp_seq], references: [anp_seq], onDelete: NoAction, onUpdate: NoAction)
+  mwd_question_attr   mwd_question_attr   @relation(fields: [qua_code], references: [qua_code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([anp_seq, sc1_step, qua_code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_studyway_rate {
+  qua_code          String            @db.Char(8)
+  sw_type           String            @db.Char(1)
+  sw_kind           String            @db.Char(8)
+  sw_kindname       String?
+  sw_rate           Decimal           @db.Decimal(5, 3)
+  sw_color          String?           @db.VarChar(10)
+  mwd_question_attr mwd_question_attr @relation(fields: [qua_code], references: [qua_code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([qua_code, sw_type, sw_kind])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_talent_job_map {
+  tjm_code1 String  @db.Char(8)
+  tjm_code2 String  @db.Char(8)
+  tjm_code3 String  @db.Char(8)
+  tjm_code4 String  @db.Char(8)
+  jo_code   String  @db.Char(8)
+  mwd_job   mwd_job @relation(fields: [jo_code], references: [jo_code], onDelete: NoAction, onUpdate: NoAction, map: "mwd_talent_job_map_fk")
+
+  @@id([tjm_code1, tjm_code2, tjm_code3, tjm_code4, jo_code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_talent_tendency_map {
+  ttm_code1 String @db.Char(8)
+  ttm_code2 String @db.Char(8)
+
+  @@id([ttm_code1, ttm_code2])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_tendency_duty_map {
+  tdm_code1 String   @db.Char(8)
+  tdm_code2 String   @db.Char(8)
+  du_code   String   @db.Char(8)
+  tdm_code3 String   @db.Char(18)
+  tdm_code4 String?  @db.Char(18)
+  tdm_code5 String?  @db.Char(18)
+  mwd_duty  mwd_duty @relation(fields: [du_code], references: [du_code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([du_code, tdm_code1, tdm_code2, tdm_code3], map: "mwd_tendency_duty_map_pk")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_tendency_job_map {
+  tjm_code1 String  @db.Char(8)
+  tjm_code2 String  @db.Char(8)
+  tjm_code3 String  @db.Char(8)
+  jo_code   String  @db.Char(8)
+  mwd_job   mwd_job @relation(fields: [jo_code], references: [jo_code], onDelete: NoAction, onUpdate: NoAction, map: "mwd_tendency_job_map_fk")
+
+  @@id([tjm_code1, tjm_code2, tjm_code3, jo_code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_tendency_study {
+  tes_study_tendency String?
+  tes_study_way      String?
+  qua_code           String            @id @db.Char(8)
+  tes_study_type     String?           @db.Char(2)
+  mwd_question_attr  mwd_question_attr @relation(fields: [qua_code], references: [qua_code], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model mwd_tendency_subject_map {
+  tsm_subject_code        String  @id @db.Char(8)
+  tsm_subject             String? @db.VarChar(20)
+  tsm_subject_group       String? @db.VarChar(20)
+  tsm_subject_choice      String? @db.VarChar(20)
+  tsm_communication_type  String? @db.VarChar(20)
+  tsm_creation_type       String? @db.VarChar(20)
+  tsm_practical_type      String? @db.VarChar(20)
+  tsm_sports_type         String? @db.VarChar(20)
+  tsm_norm_type           String? @db.VarChar(20)
+  tsm_inference_type      String? @db.VarChar(20)
+  tsm_production_type     String? @db.VarChar(20)
+  tsm_life_type           String? @db.VarChar(20)
+  tsm_analysis_type       String? @db.Char(18)
+  tsm_observation_type    String? @db.VarChar(20)
+  tsm_principle_type      String? @db.VarChar(20)
+  tsm_service_type        String? @db.VarChar(20)
+  tsm_education_type      String? @db.VarChar(20)
+  tsm_multiplex_type      String? @db.VarChar(20)
+  tsm_adventurous_type    String? @db.VarChar(20)
+  tsm_use                 String  @db.Char(1)
+  tsm_subject_explain     String?
+  tsm_subject_group_code  String? @db.Char(8)
+  tsm_subject_choice_code String? @db.Char(8)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model mwd_turn_product {
+  turn_pd_seq        Int                @id @default(autoincrement())
+  ins_seq            Int
+  tur_seq            Int
+  pd_num             Int                @db.SmallInt
+  turn_pd_price      Int
+  turn_pd_desc       String?            @db.VarChar(500)
+  use_yn             String             @default("Y") @db.Char(1)
+  created_at         DateTime?          @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?          @default(now()) @db.Timestamptz(6)
+  mwd_product        mwd_product        @relation(fields: [pd_num], references: [pd_num], onDelete: Cascade, onUpdate: NoAction, map: "fk_product")
+  mwd_institute_turn mwd_institute_turn @relation(fields: [ins_seq, tur_seq], references: [ins_seq, tur_seq], onDelete: Cascade, onUpdate: NoAction, map: "fk_turn")
+
+  @@unique([tur_seq, pd_num])
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model tmp_question {
+  qu_code             String? @db.Char(8)
+  qu_kind1            String? @db.VarChar(10)
+  qu_kind2            String? @db.Char(8)
+  qu_kind3            String? @db.Char(8)
+  qu_order            Int?
+  qu_use              String? @db.Char(1)
+  qu_ex1wei           Int?    @db.SmallInt
+  qu_ex2wei           Int?    @db.SmallInt
+  qu_ex3wei           Int?    @db.SmallInt
+  qu_ex4wei           Int?    @db.SmallInt
+  qu_ex5wei           Int?    @db.SmallInt
+  qu_explain          String?
+  qu_ex6wei           Int?    @db.SmallInt
+  qu_filename         String? @db.Char(8)
+  qu_qusyn            String? @db.Char(1)
+  qu_action           String? @db.VarChar(50)
+  qu_text             String?
+  qu_category         String? @db.VarChar(20)
+  qu_choice_options   Int?    @db.SmallInt
+  qu_time_limit_sec   Int?
+  qu_template_type    String?
+  qu_template_options Json?
+
+  @@ignore
+}
+
+enum SummaryStatus {
+  completed
+  failed
+}
+
+enum mwd_question_template_type {
+  MULTI_SURVEY
+  TIMED_CREATIVITY
+  PASSAGE_COMPREHENSION
+  TIMED_IMAGE_RECALL
+  SIMPLE_IMAGE_CHOICE
+  IMAGE_AS_CHOICE
+  TIMED_IMAGE_SEQUENCE
+  TIMED_MEMORY_TEST
+  PURE_TEXT_LOGIC
+  PURE_TEXT_QUESTION
+}
+
+enum qna_category {
+  consult
+  product
+  payment
+  tech
+  etc
+}
+
+enum qna_sender {
+  user
+  staff
+}
+
+enum qna_status {
+  received
+  in_progress
+  answered
+  closed
+}

@@ -1,0 +1,8 @@
+{
+  "moderate": true,
+  "allowlist": [
+    "GHSA-67hx-6x53-jw92"
+  ],
+  "report-type": "summary",
+  "output-format": "text"
+}
