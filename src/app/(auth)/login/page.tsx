@@ -29,7 +29,11 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const redirectTo = searchParams.get('redirect') || '/dashboard'
+  // 보안: 상대 경로만 허용, 절대 URL 차단
+  const rawRedirect = searchParams.get('redirect')
+  const redirectTo = rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') 
+    ? rawRedirect 
+    : '/dashboard'
 
   // URL 파라미터에서 오류 메시지 확인
   useEffect(() => {
@@ -52,12 +56,6 @@ export default function LoginPage() {
     if (isAuthenticated && !isLoading) {
       console.log('인증 상태 확인됨, 리디렉션 실행:', redirectTo)
       router.push(redirectTo)
-      // 백업 리디렉션
-      setTimeout(() => {
-        if (window.location.pathname !== redirectTo) {
-          window.location.href = redirectTo
-        }
-      }, 1000)
     }
   }, [isAuthenticated, isLoading, router, redirectTo])
 
@@ -139,15 +137,8 @@ export default function LoginPage() {
         // 로그인 성공 메시지 표시
         setErrors({ general: '' })
         
-        // Next.js 라우터로 먼저 시도
+        // Next.js 라우터만 사용 (안전한 내부 라우팅)
         router.push(redirectTo)
-        
-        // 백업으로 강제 페이지 이동
-        setTimeout(() => {
-          if (window.location.pathname === '/login') {
-            window.location.href = redirectTo
-          }
-        }, 1000)
       } else {
         setErrors({ general: result.error || '아이디 또는 비밀번호가 올바르지 않습니다.' })
       }

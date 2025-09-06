@@ -1,9 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { createHealthCheckResponse } from '@/lib/middleware/database'
 
-export async function GET() {
-  return NextResponse.json({
-    success: true,
-    message: 'Mobile API is working',
-    timestamp: new Date().toISOString()
-  })
+export async function GET(request: NextRequest) {
+  return createHealthCheckResponse()
 }

@@ -3,6 +3,7 @@ import { authenticateUser, generateTokens, getTokenCookieOptions } from '@/lib/a
 
 export async function POST(request: NextRequest) {
   try {
+    console.warn('⚠️  DEPRECATED: /api/auth/simple-login is deprecated. Use /api/auth/login instead.')
     console.log('Simple login API called')
     
     const body = await request.json()
